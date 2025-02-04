@@ -20,11 +20,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * <p>
- * YTM rate calculation by using
- * <a href="https://en.wikipedia.org/wiki/Newton%27s_method">Newton's method</a>
+ * Library for financial calculation as YTM (APR,IRR,...) calculation, discount
+ * amount,...
  * </p>
  * 
  * @author Thierry NESTELHUT
+ * @author CAMBYZE
+ * @see <a href="https://cambyze.com">Cambyze</a>
  * 
  */
 public class FinancialCalculation {
