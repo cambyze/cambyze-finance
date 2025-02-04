@@ -37,11 +37,15 @@ public class FinancialCalculation {
 	private static final int MAX_NUMBER_OF_ITERATIONS = 5000;
 	private static final int SCALE = 20;
 	private static final BigDecimal MAX_RANGE = BigDecimal.TEN.pow(200);
-	private static final BigDecimal EPSILON = BigDecimal.valueOf(1E-6);
+	private static final BigDecimal EPSILON = BigDecimal.valueOf(1E-8);
 
 	private static final Locale LOCALE = new Locale("en", "US");
 	private static final NumberFormat CURRENCY_FORMATTER = NumberFormat
 			.getCurrencyInstance(LOCALE);
+
+	private static int discountCounter;
+	private static int iterationsCounter;
+	private static LinkedHashMap<Integer, BigDecimal> iterations;
 
 	/**
 	 * <p>
@@ -52,9 +56,14 @@ public class FinancialCalculation {
 	private static Optional<BigDecimal> findZero(
 			Function<BigDecimal, BigDecimal> function,
 			Function<BigDecimal, BigDecimal> derivative) {
+
+		// variables init.
 		BigDecimal x = BigDecimal.ZERO;
-		int iterationsCounter = 0;
+		FinancialCalculation.iterationsCounter = 0;
+		FinancialCalculation.iterations = new LinkedHashMap<Integer, BigDecimal>();
+
 		do {
+			FinancialCalculation.iterations.put(iterationsCounter, x);
 			BigDecimal derivativeAtX = derivative.apply(x);
 			if (derivativeAtX.compareTo(BigDecimal.ZERO) == 0) {
 				return Optional.empty();
@@ -62,7 +71,7 @@ public class FinancialCalculation {
 			if (x.compareTo(BigDecimal.ZERO) < 0) {
 				x = BigDecimal.ZERO;
 			}
-			if (iterationsCounter++ > MAX_NUMBER_OF_ITERATIONS) {
+			if (FinancialCalculation.iterationsCounter++ > MAX_NUMBER_OF_ITERATIONS) {
 				return Optional.empty();
 			}
 			if (x.compareTo(MAX_RANGE) > 0) {
@@ -71,6 +80,11 @@ public class FinancialCalculation {
 			x = x.subtract(function.apply(x).divide(derivativeAtX, SCALE,
 					RoundingMode.HALF_UP));
 		} while (errorIsLargerThanExpected(function, x, EPSILON));
+
+		LOGGER.info("Find zero for the value of " + x + " after "
+				+ FinancialCalculation.iterationsCounter + " iterations");
+		LOGGER.info("Iterations: " + FinancialCalculation.iterations);
+
 		return Optional.of(x);
 	}
 
@@ -116,6 +130,8 @@ public class FinancialCalculation {
 			return BigDecimal.ZERO;
 		}
 
+		FinancialCalculation.discountCounter = 0;
+
 		BigDecimal rate = FinancialCalculation
 				.findZero(x -> cashFlowSum(cashFlow, x),
 						x -> cashFlowSumDerivative(cashFlow, x))
@@ -123,6 +139,12 @@ public class FinancialCalculation {
 						"Can't find YTM rate for cash flow "
 								+ cashFlow.toString()))
 				.multiply(BigDecimal.valueOf(100));
+
+		LOGGER.info("Find the rate " + rate + " after "
+				+ FinancialCalculation.iterationsCounter + " iterations and "
+				+ FinancialCalculation.discountCounter
+				+ " discount calculations");
+
 		MathContext m = new MathContext(6); // 6 precision
 		return rate.round(m);
 	}
@@ -169,6 +191,8 @@ public class FinancialCalculation {
 				"discount payment :" + CURRENCY_FORMATTER.format(discountAmount)
 						+ " for " + payment.getKey() + " => "
 						+ CURRENCY_FORMATTER.format(payment.getValue()));
+		// increases the counter
+		FinancialCalculation.discountCounter++;
 
 		return discountAmount;
 	}
