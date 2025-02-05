@@ -8,7 +8,6 @@ import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -118,7 +117,7 @@ public class FinancialCalculation {
      * </p>
      * 
      * @param cashFlow     cashflow of date/amount as a Hash table and linked list
-     * @param isActualDays true: real/365 base else 30/360
+     * @param isActualDays calculation base if true: real/365 else: 30/360
      * @return the calculated YTM rate
      * 
      */
@@ -149,22 +148,33 @@ public class FinancialCalculation {
     }
 
     /**
-     * Calculate the sum of the discounted amount
+     * Calculate the sum of the discounted amounts
+     * <p>
+     * This function uses parallelStream for performance aspects to treat the
+     * LinkedHashMap
+     * </p>
      * 
      * @param cashFlow     (date/amount)
      * @param rate         discount rate
-     * @param isActualDays true: real/365 base else 30/360
-     * @return
+     * @param isActualDays calculation base if true: real/365 else: 30/360
+     * @return the sum of the discounted amounts
+     * @see <a href=
+     *      "https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/stream/Stream.html">Stream
+     *      Javadoc</a>
      */
     private static BigDecimal cashFlowSum(LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate,
 	    boolean isActualDays) {
 
-	LOGGER.debug("Parameters: " + cashFlow + " / " + rate);
+	LOGGER.debug("Parameters: " + cashFlow + " / " + rate + " / " + isActualDays);
 
-	// Determine the start date of the cashflow
-	LocalDate startDate = cashFlow.entrySet().stream().min(Comparator.comparing(Map.Entry::getKey)).get().getKey();
+	// Determine the start date of the LinkedHashMap cashflow
+	LocalDate startDate = cashFlow.entrySet().parallelStream().min(comparingByKey(LocalDate::compareTo)).get()
+		.getKey();
 
-	BigDecimal sum = cashFlow.entrySet().stream().map(entry -> discountAmount(startDate, entry, rate, isActualDays))
+	// Parallel calculation of the sum of discounted amounts of the LinkedHashMap
+	// "cashflow"
+	BigDecimal sum = cashFlow.entrySet().parallelStream()
+		.map(entry -> discountAmount(startDate, entry, rate, isActualDays))
 		.reduce(BigDecimal.ZERO, BigDecimal::add);
 
 	LOGGER.info("Sum of discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
@@ -174,36 +184,33 @@ public class FinancialCalculation {
 
     /**
      * Calculate the sum of the "derivative" discounted amount
+     * <p>
+     * This function uses parallelStream for performance aspects to treat the
+     * LinkedHashMap
+     * </p>
      * 
      * @param cashFlow     (date/amount)
      * @param rate         discount rate
-     * @param isActualDays true: real/365 base else 30/360
-     * @return
+     * @param isActualDays calculation base if true: real/365 else: 30/360
+     * @return the sum of the "derivative" discounted amounts
+     * @see <a href=
+     *      "https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/stream/Stream.html">Stream
+     *      Javadoc</a>
      */
     private static BigDecimal cashFlowSumDerivative(LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate,
 	    boolean isActualDays) {
 
-	LOGGER.debug("Parameters: " + cashFlow + " / " + rate);
+	LOGGER.debug("Parameters: " + cashFlow + " / " + rate + " / " + isActualDays);
 
 	// Determine the start date of the cashflow
-	LocalDate startDate = cashFlow.entrySet().stream().min(comparingByKey(LocalDate::compareTo)).get().getKey();
+	LocalDate startDate = cashFlow.entrySet().parallelStream().min(comparingByKey(LocalDate::compareTo)).get()
+		.getKey();
 
-	BigDecimal sum;
-	if (isActualDays) {
-	    sum = cashFlow.entrySet().stream().map(entry -> entry.getValue()
-		    .multiply(BigDecimal.valueOf(
-			    Math.pow(1 + rate.doubleValue(), -daysBetweenPayments(startDate, entry) / 365.0 - 1)))
-		    .multiply(BigDecimal.valueOf(-daysBetweenPayments(startDate, entry))
-			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_UP)))
-		    .reduce(BigDecimal.ZERO, BigDecimal::add);
-	} else {
-	    sum = cashFlow.entrySet().stream().map(entry -> entry.getValue()
-		    .multiply(BigDecimal.valueOf(
-			    Math.pow(1 + rate.doubleValue(), -monthsBetweenPayments(startDate, entry) / 12.0 - 1)))
-		    .multiply(BigDecimal.valueOf(-monthsBetweenPayments(startDate, entry))
-			    .divide(BigDecimal.valueOf(12.0), SCALE, RoundingMode.HALF_UP)))
-		    .reduce(BigDecimal.ZERO, BigDecimal::add);
-	}
+	// Parallel calculation of the sum of "derivative" discounted amounts of
+	// LinkedHashMap "cashflow"
+	BigDecimal sum = cashFlow.entrySet().parallelStream()
+		.map(entry -> derivativeDiscountAmount(startDate, entry, rate, isActualDays))
+		.reduce(BigDecimal.ZERO, BigDecimal::add);
 
 	LOGGER.info("Sum of derivative discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
 
@@ -211,21 +218,22 @@ public class FinancialCalculation {
     }
 
     /**
-     * Calculation of discount payment for a date and a YTM rate
+     * Calculation of discount payment for a date and an effective rate
      * <p>
      * <b>In french: </b>Actualisation d'un montant à une date et un taux actuariel
      * donné
      * </p>
      * <p>
-     * NB: This calculation is based on <b>years of 365 days</b> independently of
-     * the real number of days of each year
+     * NB: This calculation is based on <b>actual days / 365 days</b> independently
+     * of the real number of days for each year. The base <b>30 / 360</b> is also
+     * available
      * </p>
      * 
      * @param startDate    date for which the payment is discounted
      * @param payment      (date/amount)
      * @param rate         discount rate
-     * @param isActualDays true: real/365 base else 30/360
-     * @return
+     * @param isActualDays calculation base if true: real/365 else: 30/360
+     * @return the discount payment for a date and an effective rate
      */
     public static BigDecimal discountAmount(LocalDate startDate, Map.Entry<LocalDate, BigDecimal> payment,
 	    BigDecimal rate, boolean isActualDays) {
@@ -242,6 +250,51 @@ public class FinancialCalculation {
 
 	LOGGER.debug("discount payment :" + CURRENCY_FORMATTER.format(discountAmount) + " for " + payment.getKey()
 		+ " => " + CURRENCY_FORMATTER.format(payment.getValue()));
+
+	return discountAmount;
+    }
+
+    /**
+     * Calculation of "derivative" discount payment for a date and a YTM rate
+     * <p>
+     * <b>In french: </b>Derivé de la fonction d'actualisation d'un montant à une
+     * date et un taux actuariel donné
+     * </p>
+     * <p>
+     * NB: This calculation is based on <b>actual days / 365 days</b> independently
+     * of the real number of days for each year. The base <b>30 / 360</b> is also
+     * available
+     * </p>
+     * 
+     * @param startDate    date for which the payment is discounted
+     * @param payment      (date/amount)
+     * @param rate         discount rate
+     * @param isActualDays calculation base if true: real/365 else: 30/360
+     * @return
+     */
+    private static BigDecimal derivativeDiscountAmount(LocalDate startDate, Map.Entry<LocalDate, BigDecimal> payment,
+	    BigDecimal rate, boolean isActualDays) {
+
+	LOGGER.debug("Parameters: " + startDate + " / " + payment + " / " + rate + "/" + isActualDays);
+
+	BigDecimal discountAmount;
+	if (isActualDays) {
+	    discountAmount = payment.getValue()
+		    .multiply(BigDecimal.valueOf(
+			    Math.pow(1 + rate.doubleValue(), -daysBetweenPayments(startDate, payment) / 365.0 - 1)))
+		    .multiply(BigDecimal.valueOf(-daysBetweenPayments(startDate, payment))
+			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_UP));
+
+	} else {
+	    discountAmount = payment.getValue()
+		    .multiply(BigDecimal.valueOf(
+			    Math.pow(1 + rate.doubleValue(), -monthsBetweenPayments(startDate, payment) / 12.0 - 1)))
+		    .multiply(BigDecimal.valueOf(-daysBetweenPayments(startDate, payment))
+			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_UP));
+	}
+
+	LOGGER.debug("derivative discount payment :" + CURRENCY_FORMATTER.format(discountAmount) + " for "
+		+ payment.getKey() + " => " + CURRENCY_FORMATTER.format(payment.getValue()));
 
 	return discountAmount;
     }
