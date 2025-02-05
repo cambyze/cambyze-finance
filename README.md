@@ -7,3 +7,4 @@ For instance, in the function <b>FinancialCalculation.effectiveRateFromCashFlow<
 <p>
 This rate calculation is done as described in the wiki page <a href="https://w.wiki/CwtN">Annual percentage rate</a>.
 </p>
+<p> Two calculation bases are available: real/365 or 30/360</p>
