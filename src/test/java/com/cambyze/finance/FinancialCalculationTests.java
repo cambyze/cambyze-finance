@@ -41,7 +41,7 @@ class FinancialCalculationTests {
 	LOGGER.info("Rate with a very simple annual cashflow real/365: " + rate.doubleValue());
 	assertEquals(20.0, rate.doubleValue());
 	rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow, false);
-	LOGGER.info("Rate with a very simple annual cashflow 1/12: " + rate.doubleValue());
+	LOGGER.info("Rate with a very simple annual cashflow 30/360: " + rate.doubleValue());
 	assertEquals(20.0, rate.doubleValue());
 
 	cashflow.clear();
@@ -51,7 +51,8 @@ class FinancialCalculationTests {
 	LOGGER.info("Rate with a very simple 6 months cashflow real/365: " + rate.doubleValue());
 	assertEquals(21.1913, rate.doubleValue());
 	rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow, false);
-	LOGGER.info("Rate with a very simple 6 months cashflow 1/12: " + rate.doubleValue());
+	LOGGER.info("Rate with a very simple 6 months cashflow 30/360: " + rate.doubleValue());
+	assertEquals(21.0, rate.doubleValue());
     }
 
     @Test
@@ -82,7 +83,7 @@ class FinancialCalculationTests {
 	LOGGER.info("Rate with a " + i + " months loan real/365: " + rate.doubleValue());
 	assertEquals(7.22607, rate.doubleValue());
 	rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow, false);
-	LOGGER.info("Rate with a " + i + " months loan 1/12: " + rate.doubleValue());
+	LOGGER.info("Rate with a " + i + " months loan 30/360: " + rate.doubleValue());
 	assertEquals(7.229, rate.doubleValue());
     }
 
@@ -115,7 +116,7 @@ class FinancialCalculationTests {
 	LOGGER.info("Rate with a " + i + " months loan actual/365: " + rate.doubleValue());
 	assertEquals(12.6757, rate.doubleValue());
 	rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow, false);
-	LOGGER.info("Rate with a " + i + " months loan 1/12: " + rate.doubleValue());
+	LOGGER.info("Rate with a " + i + " months loan 30/360: " + rate.doubleValue());
 	assertEquals(12.6824, rate.doubleValue());
     }
 }

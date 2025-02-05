@@ -135,8 +135,8 @@ public class FinancialCalculation {
 	boolean isActualDaysLocal = isActualDays.booleanValue();
 
 	BigDecimal rate = FinancialCalculation
-		.findZeroNewtonMethod(x -> cashFlowSum(cashFlow, x, isActualDaysLocal),
-			x -> cashFlowSumDerivative(cashFlow, x, isActualDaysLocal))
+		.findZeroNewtonMethod(x -> sumOfDiscountedAmounts(cashFlow, x, isActualDaysLocal),
+			x -> derivativeSumOfDiscountedAmounts(cashFlow, x, isActualDaysLocal))
 		.orElseThrow(() -> new UnsupportedOperationException(
 			"Can't find YTM rate for cash flow " + cashFlow.toString()))
 		.multiply(BigDecimal.valueOf(100));
@@ -148,7 +148,8 @@ public class FinancialCalculation {
     }
 
     /**
-     * Calculate the sum of the discounted amounts
+     * Calculate the present value and/or the sum of the discounted amounts of the
+     * cashflow at the effective rate sent as parameters
      * <p>
      * This function uses parallelStream for performance aspects to treat the
      * LinkedHashMap
@@ -162,7 +163,7 @@ public class FinancialCalculation {
      *      "https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/stream/Stream.html">Stream
      *      Javadoc</a>
      */
-    private static BigDecimal cashFlowSum(LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate,
+    public static BigDecimal sumOfDiscountedAmounts(LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate,
 	    boolean isActualDays) {
 
 	LOGGER.debug("Parameters: " + cashFlow + " / " + rate + " / " + isActualDays);
@@ -197,8 +198,8 @@ public class FinancialCalculation {
      *      "https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/stream/Stream.html">Stream
      *      Javadoc</a>
      */
-    private static BigDecimal cashFlowSumDerivative(LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate,
-	    boolean isActualDays) {
+    private static BigDecimal derivativeSumOfDiscountedAmounts(LinkedHashMap<LocalDate, BigDecimal> cashFlow,
+	    BigDecimal rate, boolean isActualDays) {
 
 	LOGGER.debug("Parameters: " + cashFlow + " / " + rate + " / " + isActualDays);
 
@@ -283,14 +284,14 @@ public class FinancialCalculation {
 		    .multiply(BigDecimal.valueOf(
 			    Math.pow(1 + rate.doubleValue(), -daysBetweenPayments(startDate, payment) / 365.0 - 1)))
 		    .multiply(BigDecimal.valueOf(-daysBetweenPayments(startDate, payment))
-			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_UP));
+			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_EVEN));
 
 	} else {
 	    discountAmount = payment.getValue()
 		    .multiply(BigDecimal.valueOf(
 			    Math.pow(1 + rate.doubleValue(), -monthsBetweenPayments(startDate, payment) / 12.0 - 1)))
 		    .multiply(BigDecimal.valueOf(-daysBetweenPayments(startDate, payment))
-			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_UP));
+			    .divide(BigDecimal.valueOf(365.0), SCALE, RoundingMode.HALF_EVEN));
 	}
 
 	LOGGER.debug("derivative discount payment :" + CURRENCY_FORMATTER.format(discountAmount) + " for "
