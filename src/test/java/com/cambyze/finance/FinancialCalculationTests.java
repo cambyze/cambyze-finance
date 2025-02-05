@@ -16,80 +16,103 @@ class FinancialCalculationTests {
 
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(FinancialCalculationTests.class);
+	private static final Locale LOCALE = new Locale("en", "US");
+	private static final NumberFormat CURRENCY_FORMATTER = NumberFormat
+			.getCurrencyInstance(LOCALE);
+
+	private static final LocalDate TODAY = LocalDate.now();
 
 	@Test
 	void rateSimple() {
 
-		Locale locale = new Locale("en", "US");
-		NumberFormat currencyFormatter = NumberFormat
-				.getCurrencyInstance(locale);
+		LinkedHashMap<LocalDate, BigDecimal> cashflow = new LinkedHashMap<LocalDate, BigDecimal>();
+		BigDecimal rate;
 
-		BigDecimal rate = FinancialCalculation.calculateYTM(null);
+		rate = FinancialCalculation.effectiveRateFromCashFlow(null);
 		LOGGER.info("Rate when null cashflow: " + rate.doubleValue());
 		assertEquals(0.0, rate.doubleValue());
 
-		LinkedHashMap<LocalDate, BigDecimal> cashflow = new LinkedHashMap<LocalDate, BigDecimal>();
-		rate = FinancialCalculation.calculateYTM(cashflow);
+		rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow);
 		LOGGER.info("Rate when empty cashflow: " + rate.doubleValue());
 		assertEquals(0.0, rate.doubleValue());
 
-		LocalDate today = LocalDate.now();
-		cashflow.put(today, new BigDecimal(-100000.0));
-		cashflow.put(today.plusYears(1), new BigDecimal(120000.0));
-		rate = FinancialCalculation.calculateYTM(cashflow);
+		cashflow.clear();
+		cashflow.put(TODAY, new BigDecimal(-100000.0));
+		cashflow.put(TODAY.plusYears(1), new BigDecimal(120000.0));
+		rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow);
 		LOGGER.info("Rate with a very simple annual cashflow: "
 				+ rate.doubleValue());
 		assertEquals(20.0, rate.doubleValue());
 
 		cashflow.clear();
-		cashflow.put(today, new BigDecimal(-100000.0));
-		cashflow.put(today.plusMonths(6), new BigDecimal(110000.0));
-		rate = FinancialCalculation.calculateYTM(cashflow);
+		cashflow.put(TODAY, new BigDecimal(-100000.0));
+		cashflow.put(TODAY.plusMonths(6), new BigDecimal(110000.0));
+		rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow);
 		LOGGER.info("Rate with a very simple 6 months cashflow: "
 				+ rate.doubleValue());
 		assertEquals(21.1913, rate.doubleValue());
+	}
+
+	@Test
+	void rate60MonthsLoan() {
+
+		LinkedHashMap<LocalDate, BigDecimal> cashflow = new LinkedHashMap<LocalDate, BigDecimal>();
+		BigDecimal rate;
+		LocalDate creditDate;
+		LocalDate instDate;
+		double creditAmount;
+		double instAmount;
+		int i;
 
 		cashflow.clear();
-		LocalDate creditDate = LocalDate.of(2020, 1, 1);
-		LocalDate instDate;
-		double creditAmount = 2000000.0;
+		creditDate = LocalDate.of(2020, 1, 1);
+		creditAmount = 2000000.0;
 		cashflow.put(creditDate, new BigDecimal(-creditAmount));
-		LOGGER.info("Credit amount (" + creditDate + ") = "
-				+ currencyFormatter.format(creditAmount));
+		LOGGER.debug("Credit amount (" + creditDate + ") = "
+				+ CURRENCY_FORMATTER.format(creditAmount));
 		// classic loan
-		double instAmount = 39602.40;
-		int i;
+		instAmount = 39602.40;
 		for (i = 1; i <= 60; i++) {
 			instDate = creditDate.plusMonths(i);
-			LOGGER.info("instalment #" + i + " (" + instDate + ") = "
-					+ currencyFormatter.format(instAmount));
+			LOGGER.debug("instalment #" + i + " (" + instDate + ") = "
+					+ CURRENCY_FORMATTER.format(instAmount));
 			cashflow.put(instDate, new BigDecimal(instAmount));
 		}
-		rate = FinancialCalculation.calculateYTM(cashflow);
+		rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow);
 		i--;
 		LOGGER.info("Rate with a " + i + " months loan: " + rate.doubleValue());
 		assertEquals(7.22609, rate.doubleValue());
+	}
+
+	@Test
+	void rate120MonthsLoan() {
+
+		LinkedHashMap<LocalDate, BigDecimal> cashflow = new LinkedHashMap<LocalDate, BigDecimal>();
+		BigDecimal rate;
+		LocalDate creditDate;
+		LocalDate instDate;
+		double creditAmount;
+		double instAmount;
+		int i;
 
 		cashflow.clear();
 		creditDate = LocalDate.of(2020, 1, 1);
 		creditAmount = 300000.0;
 		cashflow.put(creditDate, new BigDecimal(-creditAmount));
-		LOGGER.info("Credit amount (" + creditDate + ") = "
-				+ currencyFormatter.format(creditAmount));
+		LOGGER.debug("Credit amount (" + creditDate + ") = "
+				+ CURRENCY_FORMATTER.format(creditAmount));
 
 		// classic loan
 		instAmount = 2934.36;
 		for (i = 1; i <= 120; i++) {
 			instDate = creditDate.plusMonths(i);
-			LOGGER.info("instalment #" + i + " (" + instDate + ") = "
-					+ currencyFormatter.format(instAmount));
+			LOGGER.debug("instalment #" + i + " (" + instDate + ") = "
+					+ CURRENCY_FORMATTER.format(instAmount));
 			cashflow.put(instDate, new BigDecimal(instAmount));
 		}
-		rate = FinancialCalculation.calculateYTM(cashflow);
+		rate = FinancialCalculation.effectiveRateFromCashFlow(cashflow);
 		i--;
 		LOGGER.info("Rate with a " + i + " months loan: " + rate.doubleValue());
 		assertEquals(3.31767, rate.doubleValue());
-
 	}
-
 }

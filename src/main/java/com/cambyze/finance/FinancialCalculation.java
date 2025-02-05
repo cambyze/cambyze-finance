@@ -43,27 +43,31 @@ public class FinancialCalculation {
 	private static final NumberFormat CURRENCY_FORMATTER = NumberFormat
 			.getCurrencyInstance(LOCALE);
 
-	private static int discountCounter;
-	private static int iterationsCounter;
-	private static LinkedHashMap<Integer, BigDecimal> iterations;
-
 	/**
 	 * <p>
-	 * <a href="https://en.wikipedia.org/wiki/Newton%27s_method">Newton's
-	 * method</a> to try to calculate approximatively zero
+	 * <a href="https://w.wiki/9N4M">Newton's method</a> to try to find the zero
+	 * for a function by using the division of function(x) by its derivative(x)
 	 * </p>
+	 * 
+	 * @param function
+	 *            the function
+	 * @param derivative
+	 *            the derivative of the function
+	 * @return the value where the function equals approximatively zero
 	 */
-	private static Optional<BigDecimal> findZero(
+	public static Optional<BigDecimal> findZeroNewtonMethod(
 			Function<BigDecimal, BigDecimal> function,
 			Function<BigDecimal, BigDecimal> derivative) {
 
 		// variables init.
 		BigDecimal x = BigDecimal.ZERO;
-		FinancialCalculation.iterationsCounter = 0;
-		FinancialCalculation.iterations = new LinkedHashMap<Integer, BigDecimal>();
+		int iterationsCounter = 0;
+		LinkedHashMap<Integer, BigDecimal> iterations = new LinkedHashMap<Integer, BigDecimal>();
 
 		do {
-			FinancialCalculation.iterations.put(iterationsCounter, x);
+			// Store each iteration in a list
+			iterations.put(iterationsCounter, x);
+
 			BigDecimal derivativeAtX = derivative.apply(x);
 			if (derivativeAtX.compareTo(BigDecimal.ZERO) == 0) {
 				return Optional.empty();
@@ -71,7 +75,7 @@ public class FinancialCalculation {
 			if (x.compareTo(BigDecimal.ZERO) < 0) {
 				x = BigDecimal.ZERO;
 			}
-			if (FinancialCalculation.iterationsCounter++ > MAX_NUMBER_OF_ITERATIONS) {
+			if (iterationsCounter++ > MAX_NUMBER_OF_ITERATIONS) {
 				return Optional.empty();
 			}
 			if (x.compareTo(MAX_RANGE) > 0) {
@@ -82,8 +86,8 @@ public class FinancialCalculation {
 		} while (errorIsLargerThanExpected(function, x, EPSILON));
 
 		LOGGER.info("Find zero for the value of " + x + " after "
-				+ FinancialCalculation.iterationsCounter + " iterations");
-		LOGGER.info("Iterations: " + FinancialCalculation.iterations);
+				+ iterationsCounter + " iterations");
+		LOGGER.info("Iterations: " + iterations);
 
 		return Optional.of(x);
 	}
@@ -96,13 +100,16 @@ public class FinancialCalculation {
 
 	/**
 	 * <p>
-	 * <b>This function allows to calculate YTM rates as APR, IRR based on the
-	 * cashflow you provide</b>
+	 * <b>This function allows to calculate YTM effective rates as APR, IRR
+	 * based on the cashflow you provide</b>
 	 * </p>
 	 * <p>
-	 * Rate calculation by using the
-	 * <a href="https://en.wikipedia.org/wiki/Newton%27s_method">Newton's
-	 * method</a>
+	 * Rate calculation as described in the wiki page
+	 * <a href="https://w.wiki/CwtN">Annual percentage rate</a>
+	 * </p>
+	 * <p>
+	 * This fonction uses the <a href="https://w.wiki/9N4M">Newton's method</a>
+	 * for best performance
 	 * </p>
 	 * <p>
 	 * <p>
@@ -123,27 +130,22 @@ public class FinancialCalculation {
 	 * @return the calculated YTM rate
 	 * 
 	 */
-	public static BigDecimal calculateYTM(
+	public static BigDecimal effectiveRateFromCashFlow(
 			LinkedHashMap<LocalDate, BigDecimal> cashFlow) {
 
 		if (cashFlow == null || cashFlow.isEmpty()) {
 			return BigDecimal.ZERO;
 		}
 
-		FinancialCalculation.discountCounter = 0;
-
 		BigDecimal rate = FinancialCalculation
-				.findZero(x -> cashFlowSum(cashFlow, x),
+				.findZeroNewtonMethod(x -> cashFlowSum(cashFlow, x),
 						x -> cashFlowSumDerivative(cashFlow, x))
 				.orElseThrow(() -> new UnsupportedOperationException(
 						"Can't find YTM rate for cash flow "
 								+ cashFlow.toString()))
 				.multiply(BigDecimal.valueOf(100));
 
-		LOGGER.info("Find the rate " + rate + " after "
-				+ FinancialCalculation.iterationsCounter + " iterations and "
-				+ FinancialCalculation.discountCounter
-				+ " discount calculations");
+		LOGGER.info("Find the rate " + rate);
 
 		MathContext m = new MathContext(6); // 6 precision
 		return rate.round(m);
@@ -152,13 +154,45 @@ public class FinancialCalculation {
 	private static BigDecimal cashFlowSum(
 			LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate) {
 
+		LOGGER.debug("Parameters: " + cashFlow + " / " + rate);
+
 		// Determine the start date of the cashflow
 		LocalDate startDate = cashFlow.entrySet().stream()
 				.min(Comparator.comparing(Map.Entry::getKey)).get().getKey();
 
-		return cashFlow.entrySet().stream()
-				.map(entry -> discountPayment(startDate, entry, rate))
+		BigDecimal sum = cashFlow.entrySet().stream()
+				.map(entry -> discountAmount(startDate, entry, rate))
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
+
+		LOGGER.info(
+				"Sum of discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
+
+		return sum;
+	}
+
+	private static BigDecimal cashFlowSumDerivative(
+			LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate) {
+
+		LOGGER.debug("Parameters: " + cashFlow + " / " + rate);
+
+		// Determine the start date of the cashflow
+		LocalDate startDate = cashFlow.entrySet().stream()
+				.min(comparingByKey(LocalDate::compareTo)).get().getKey();
+
+		BigDecimal sum = cashFlow.entrySet().stream().map(entry -> entry
+				.getValue()
+				.multiply(BigDecimal.valueOf(Math.pow(1 + rate.doubleValue(),
+						-daysBetweenPayments(startDate, entry) / 365.0 - 1)))
+				.multiply(BigDecimal
+						.valueOf(-daysBetweenPayments(startDate, entry))
+						.divide(BigDecimal.valueOf(365.0), SCALE,
+								RoundingMode.HALF_UP)))
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+
+		LOGGER.info("Sum of derivative discounted cashFlow:"
+				+ CURRENCY_FORMATTER.format(sum));
+
+		return sum;
 	}
 
 	/**
@@ -180,7 +214,7 @@ public class FinancialCalculation {
 	 *            discount rate
 	 * @return
 	 */
-	public static BigDecimal discountPayment(LocalDate startDate,
+	public static BigDecimal discountAmount(LocalDate startDate,
 			Map.Entry<LocalDate, BigDecimal> payment, BigDecimal rate) {
 		LOGGER.debug(
 				"Parameters: " + startDate + " / " + payment + " / " + rate);
@@ -191,26 +225,8 @@ public class FinancialCalculation {
 				"discount payment :" + CURRENCY_FORMATTER.format(discountAmount)
 						+ " for " + payment.getKey() + " => "
 						+ CURRENCY_FORMATTER.format(payment.getValue()));
-		// increases the counter
-		FinancialCalculation.discountCounter++;
 
 		return discountAmount;
-	}
-
-	private static BigDecimal cashFlowSumDerivative(
-			LinkedHashMap<LocalDate, BigDecimal> cashFlow, BigDecimal rate) {
-		// Determine the start date of the cashflow
-		LocalDate startDate = cashFlow.entrySet().stream()
-				.min(comparingByKey(LocalDate::compareTo)).get().getKey();
-
-		return cashFlow.entrySet().stream().map(entry -> entry.getValue()
-				.multiply(BigDecimal.valueOf(Math.pow(1 + rate.doubleValue(),
-						-daysBetweenPayments(startDate, entry) / 365.0 - 1)))
-				.multiply(BigDecimal
-						.valueOf(-daysBetweenPayments(startDate, entry))
-						.divide(BigDecimal.valueOf(365.0), SCALE,
-								RoundingMode.HALF_UP)))
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 
 	/**
