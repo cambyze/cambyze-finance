@@ -178,7 +178,7 @@ public class FinancialCalculation {
 		.map(entry -> discountAmount(startDate, entry, rate, isActualDays))
 		.reduce(BigDecimal.ZERO, BigDecimal::add);
 
-	LOGGER.info("Sum of discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
+	LOGGER.debug("Sum of discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
 
 	return sum;
     }
@@ -213,7 +213,7 @@ public class FinancialCalculation {
 		.map(entry -> derivativeDiscountAmount(startDate, entry, rate, isActualDays))
 		.reduce(BigDecimal.ZERO, BigDecimal::add);
 
-	LOGGER.info("Sum of derivative discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
+	LOGGER.debug("Sum of derivative discounted cashFlow:" + CURRENCY_FORMATTER.format(sum));
 
 	return sum;
     }
